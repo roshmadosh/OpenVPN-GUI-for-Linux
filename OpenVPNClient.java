@@ -2,7 +2,6 @@ import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -19,6 +18,7 @@ import java.util.TimerTask;
 
 
 public class OpenVPNClient extends Application {
+	private static final String HOME = System.getenv("HOME");
 	private ComboBox<String> configDropDown;
 	private TextField usernameField;
 	private TextField passwordField;
@@ -147,7 +147,7 @@ public class OpenVPNClient extends Application {
 	private void connectToVpn(String username) {
 		try {
 			ProcessBuilder pb = new ProcessBuilder("openvpn3-autoload",
-					"--directory", "/home/hiroshin/.openvpn3/autoload").redirectErrorStream(true);
+					"--directory", HOME.concat("/.openvpn3/autoload")).redirectErrorStream(true);
 			Process process = pb.start();
 
 			InputStream stdout = process.getInputStream();

@@ -26,6 +26,7 @@ public class OpenVPNClient extends Application {
 	private Button disconnectButton;
 	private ClientLogger clientLogger;
 	private Label statusLabel;
+	private String profilePath;
 	private boolean isConnected;
 
 	@Override
@@ -49,11 +50,19 @@ public class OpenVPNClient extends Application {
 			this.statusLabel.setTextFill(Color.DARKORANGE);
 			String username = this.usernameField.getText();
 
-			Platform.runLater(() -> {
-				connectToVpn(username);
-				pingStatus(3);
-			});
+			connectToVpn(username);
+			Platform.runLater(() -> pingStatus(3, true));
 		});
+
+        this.disconnectButton.setOnAction(actionEvent -> {
+            Platform.runLater(() -> {
+                this.disconnectButton.setDisable(true);
+                this.statusLabel.setText("Disconnecting...");
+                this.statusLabel.setTextFill(Color.DARKORANGE);
+            });
+			disconnectFromVpn();
+			Platform.runLater(() -> pingStatus(3, false));
+        });
 
 		HBox buttonsBox = new HBox(this.connectButton, this.disconnectButton);
 		// Create a layout and add components to it
@@ -72,55 +81,65 @@ public class OpenVPNClient extends Application {
 		stage.show();
 	}
 
-	private void pingStatus(int i) {
+	private void pingStatus(int i, boolean isConnecting) {
 		ProcessBuilder pb = new ProcessBuilder("openvpn3", "sessions-list");
 
 		Timer timer = new Timer();
         timer.scheduleAtFixedRate(
-                new TimerTask() {
-                    private int count = 0;
+			new TimerTask() {
+				private int count = 0;
 
-                    @Override
-                    public void run() {
-                        try {
-                            Process process = pb.start();
-                            InputStream inputStream = process.getInputStream();
+				@Override
+				public void run() {
+					try {
+						Process process = pb.start();
+						InputStream inputStream = process.getInputStream();
 
-                            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+						BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
 
-                            String line;
-                            while ((line = reader.readLine()) != null) {
-                                if (line.contains("connected")) {
-                                    Platform.runLater(() -> {
-                                        disconnectButton.setDisable(false);
-                                        statusLabel.setTextFill(Color.GREEN);
-                                        statusLabel.setText("Connected");
-                                        isConnected = true;
-                                    });
-                                }
-                            }
-
-                            process.waitFor();
-                            reader.close();
-                        } catch (IOException | InterruptedException e) {
-                            e.printStackTrace();
-                        }
-
-                        count++;
-						if (count >= i) {
-							if (!isConnected) {
+						String line;
+						while ((line = reader.readLine()) != null) {
+							if (line.contains("connected") && !isConnected) {
 								Platform.runLater(() -> {
-									statusLabel.setText("Failed");
-									statusLabel.setTextFill(Color.RED);
+									disconnectButton.setDisable(false);
+									statusLabel.setTextFill(Color.GREEN);
+									statusLabel.setText("Connected");
+									isConnected = true;
+								});
+							} else if (line.contains("No sessions available") && isConnected) {
+								Platform.runLater(() -> {
 									connectButton.setDisable(false);
+									statusLabel.setTextFill(Color.RED);
+									statusLabel.setText("Disconnected");
+									isConnected = false;
 								});
 							}
-							timer.cancel();
-                        }
-                    }
-                },
-                0,
-                1000);
+						}
+
+						process.waitFor();
+						reader.close();
+					} catch (IOException | InterruptedException e) {
+						e.printStackTrace();
+					}
+
+					count++;
+					if (count >= i) {
+						boolean failedConnect = !isConnected && isConnecting;
+						boolean failedDisconnect = isConnected && !isConnecting;
+						if (failedConnect | failedDisconnect) {
+							Platform.runLater(() -> {
+								statusLabel.setText("Failed");
+								statusLabel.setTextFill(Color.RED);
+								connectButton.setDisable(false);
+							});
+						}
+						timer.cancel();
+					}
+				}
+			},
+			0,
+			1000
+		);
 	}
 
 	// reads profile configurations from the output returned from executing the command "openvpn3 configs-list" in a Bash terminal
@@ -134,13 +153,37 @@ public class OpenVPNClient extends Application {
 
 			String line;
 			while ((line = reader.readLine()) != null) {
-				if (line.contains("profile"))
-					configDropDown.getItems().add(line.substring(0, line.indexOf(" ")));
+				if (line.contains("profile")) {
+					String profile = line.substring(0, line.indexOf(" "));
+					this.profilePath = profile;
+				}
 			}
 			process.waitFor();
 			reader.close();
 		} catch (IOException | InterruptedException ie) {
 			ie.printStackTrace();
+		}
+	}
+	private void disconnectFromVpn() {
+		try {
+            System.out.println(this.profilePath);
+			ProcessBuilder pb = new ProcessBuilder("openvpn3", "session-manage",
+					"--disconnect", "--config", this.profilePath);
+			Process process = pb.start();
+			InputStream stdout = process.getInputStream();
+
+			BufferedReader reader = new BufferedReader(new InputStreamReader(stdout));
+
+			String line;
+			while ((line = reader.readLine()) != null) {
+				this.clientLogger.write(line);
+			}
+
+			process.waitFor();
+			reader.close();
+		} catch (IOException | InterruptedException ie) {
+			this.clientLogger.writeError(ie.getMessage());
+			throw new RuntimeException("Something went wrong when trying to disconnect.");
 		}
 	}
 
@@ -165,6 +208,8 @@ public class OpenVPNClient extends Application {
 			this.clientLogger.writeError(ie.getMessage());
 		}
 	}
+
+
 
 }
 

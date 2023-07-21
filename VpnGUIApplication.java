@@ -1,13 +1,9 @@
-import javax.swing.*;
+import javafx.application.Application;
 
 public class VpnGUIApplication {
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                new OpenVPNClient();
-            }
-        });
+        // Call the launch method to start the JavaFX application
+        Application.launch(OpenVPNClient.class, args);
     }
 }

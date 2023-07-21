@@ -22,6 +22,7 @@ public class ClientLogger {
             Files.write(logPath, full.getBytes(), StandardOpenOption.APPEND);
         } catch (IOException ioe) {
             ioe.printStackTrace();
+            throw new RuntimeException("Failure when writing to logs.");
         }
     }
 }

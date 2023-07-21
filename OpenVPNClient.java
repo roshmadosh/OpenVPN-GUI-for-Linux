@@ -51,7 +51,7 @@ public class OpenVPNClient extends Application {
 			String username = this.usernameField.getText();
 
 			connectToVpn(username);
-			Platform.runLater(() -> pingStatus(3, true));
+			Platform.runLater(() -> pingStatus(5, true));
 		});
 
         this.disconnectButton.setOnAction(actionEvent -> {
@@ -61,7 +61,7 @@ public class OpenVPNClient extends Application {
                 this.statusLabel.setTextFill(Color.DARKORANGE);
             });
 			disconnectFromVpn();
-			Platform.runLater(() -> pingStatus(3, false));
+			Platform.runLater(() -> pingStatus(5, false));
         });
 
 		HBox buttonsBox = new HBox(this.connectButton, this.disconnectButton);
@@ -107,6 +107,7 @@ public class OpenVPNClient extends Application {
 									isConnected = true;
 								});
 							} else if (line.contains("No sessions available") && isConnected) {
+								removeConfig();
 								Platform.runLater(() -> {
 									connectButton.setDisable(false);
 									statusLabel.setTextFill(Color.RED);
@@ -132,6 +133,10 @@ public class OpenVPNClient extends Application {
 								statusLabel.setTextFill(Color.RED);
 								connectButton.setDisable(false);
 							});
+						}
+						if (failedConnect) {
+							// Connection may be in pending state. This will remove attempt.
+							disconnectFromVpn();
 						}
 						timer.cancel();
 					}
@@ -166,21 +171,13 @@ public class OpenVPNClient extends Application {
 	}
 	private void disconnectFromVpn() {
 		try {
-            System.out.println(this.profilePath);
 			ProcessBuilder pb = new ProcessBuilder("openvpn3", "session-manage",
 					"--disconnect", "--config", this.profilePath);
 			Process process = pb.start();
-			InputStream stdout = process.getInputStream();
 
-			BufferedReader reader = new BufferedReader(new InputStreamReader(stdout));
-
-			String line;
-			while ((line = reader.readLine()) != null) {
-				this.clientLogger.write(line);
-			}
+			logStdOut(process);
 
 			process.waitFor();
-			reader.close();
 		} catch (IOException | InterruptedException ie) {
 			this.clientLogger.writeError(ie.getMessage());
 			throw new RuntimeException("Something went wrong when trying to disconnect.");
@@ -192,24 +189,42 @@ public class OpenVPNClient extends Application {
 			ProcessBuilder pb = new ProcessBuilder("openvpn3-autoload",
 					"--directory", HOME.concat("/.openvpn3/autoload")).redirectErrorStream(true);
 			Process process = pb.start();
-
-			InputStream stdout = process.getInputStream();
-			BufferedReader reader = new BufferedReader(new InputStreamReader(stdout));
-
-			this.clientLogger.write("Attempted login by ".concat(username));
-			String line;
-			while ((line = reader.readLine()) != null) {
-				this.clientLogger.write(line);
-			}
-
+			logStdOut(process);
 			process.waitFor();
-			reader.close();
 		} catch (IOException | InterruptedException ie) {
 			this.clientLogger.writeError(ie.getMessage());
 		}
 	}
 
+	// autoload (i.e. our session starter) adds redundant configs to config-list
+	private void removeConfig() {
+		try {
+			ProcessBuilder pb = new ProcessBuilder("openvpn3", "config-remove",
+					"--config", profilePath);
+			Process process = pb.start();
+			logStdOut(process);
+			process.waitFor();
+		} catch (IOException | InterruptedException ie) {
+			this.clientLogger.writeError(ie.getMessage());
+			throw new RuntimeException("Something went wrong when trying to remove config.");
+		}
+	}
 
+	private void logStdOut(Process process) {
+		try (BufferedReader reader =
+					 new BufferedReader(new InputStreamReader(process.getInputStream()))){
+
+			String line;
+			while ((line = reader.readLine()) != null) {
+				this.clientLogger.write(line);
+			}
+
+		} catch (IOException ie) {
+			ie.printStackTrace();
+			throw new RuntimeException("Failed to write STDOUT to log");
+		}
+
+	}
 
 }
 

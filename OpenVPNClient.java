@@ -31,7 +31,7 @@ public class OpenVPNClient extends Application {
 
 	@Override
 	public void start(Stage stage) throws Exception {
-		this.clientLogger = new ClientLogger(Paths.get("logs", LocalDate.now().toString()));
+		this.clientLogger = new ClientLogger(Paths.get("logs", LocalDate.now().toString().concat(".log")));
 		this.configDropDown = new ComboBox<>();
 		this.usernameField = new TextField();
 		this.passwordField = new PasswordField();
@@ -132,13 +132,16 @@ public class OpenVPNClient extends Application {
 								statusLabel.setText("Failed");
 								statusLabel.setTextFill(Color.RED);
 								connectButton.setDisable(false);
+								clientLogger.writeError("Failed operation.");
 							});
 						}
 						if (failedConnect) {
 							// Connection may be in pending state. This will remove attempt.
 							disconnectFromVpn();
+							clientLogger.writeError("Disconnected due to failed connection attempt.");
 						}
 						timer.cancel();
+
 					}
 				}
 			},

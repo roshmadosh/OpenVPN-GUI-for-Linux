@@ -13,12 +13,16 @@ public class ClientLogger {
 
     public void write(String message) throws IOException {
         String full = LocalDateTime.now().toString().concat(" ").concat(message).concat("\n");
+        if (!Files.exists(logPath)) {
+           Files.createFile(logPath);
+        }
+
         Files.write(logPath, full.getBytes(), StandardOpenOption.APPEND);
     }
 
     public void writeError(String message) {
         try {
-            String full = "ERROR".concat(LocalDateTime.now().toString().concat(" ").concat(message).concat("\n"));
+            String full = LocalDateTime.now().toString().concat(": ERROR - ").concat(message).concat("\n");
             Files.write(logPath, full.getBytes(), StandardOpenOption.APPEND);
         } catch (IOException ioe) {
             ioe.printStackTrace();
